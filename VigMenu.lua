@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("3.0.4")
+script_version("3.0.5")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "3.0.4"
+local SCRIPT_VERSION_TEXT = "3.0.5"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -410,16 +410,21 @@ local function vig_read_script_version_from_path(path)
 	return nil
 end
 
+local function vig_version_trim(s)
+	s = tostring(s or ""):match("^%s*(.-)%s*$") or ""
+	return s
+end
+
 local function get_local_script_version()
 	local p = thisScript and thisScript().path
 	local from_disk = p and vig_read_script_version_from_path(p)
 	if from_disk then
-		return from_disk
+		return vig_version_trim(from_disk)
 	end
 	if thisScript and thisScript().version and tostring(thisScript().version) ~= "" then
-		return tostring(thisScript().version)
+		return vig_version_trim(thisScript().version)
 	end
-	return SCRIPT_VERSION_TEXT
+	return vig_version_trim(SCRIPT_VERSION_TEXT)
 end
 
 local function get_articles_version_file_path()
@@ -504,7 +509,7 @@ local function fetch_update_manifest()
 				f:close()
 				pcall(os.remove, tmp)
 				local data = decode_json_str(txt)
-				if type(data) == "table" and data.current_version then
+				if type(data) == "table" and data.current_version ~= nil and tostring(data.current_version) ~= "" then
 					last_manifest_cache = data
 					return data, nil
 				end
@@ -516,10 +521,14 @@ local function fetch_update_manifest()
 end
 
 local function manifest_script_needs_update(m)
-	if not m or type(m.current_version) ~= "string" then
+	if not m or m.current_version == nil then
 		return false
 	end
-	return m.current_version ~= get_local_script_version()
+	local rem = vig_version_trim(m.current_version)
+	if rem == "" then
+		return false
+	end
+	return rem ~= vig_version_trim(get_local_script_version())
 end
 
 local function manifest_articles_needs_update(m)
@@ -552,8 +561,8 @@ local function apply_updates_from_manifest(m)
 	end
 	UpdateUi.need_script = manifest_script_needs_update(m)
 	UpdateUi.need_articles = manifest_articles_needs_update(m)
-	UpdateUi.remote_script_ver = tostring(m.current_version or "")
-	UpdateUi.remote_articles_ver = tostring(m.articles_version or "")
+	UpdateUi.remote_script_ver = vig_version_trim(m.current_version)
+	UpdateUi.remote_articles_ver = vig_version_trim(m.articles_version)
 	UpdateUi.changelog_script = type(m.update_info) == "string" and m.update_info or ""
 	UpdateUi.changelog_articles = type(m.articles_info) == "string" and m.articles_info or ""
 	UpdateUi.script_url = type(m.update_url) == "string" and m.update_url or ""
@@ -642,6 +651,10 @@ local function start_download_script_thread()
 		else
 			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Скрипт записан. Перезагрузка…", message_color)
 		end
+		local mc = last_manifest_cache
+		if mc and type(mc.update_info) == "string" and vig_version_trim(mc.update_info) ~= "" then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. mc.update_info, message_color)
+		end
 		UpdateUi.busy = false
 		wait(900)
 		try_reload_script()
@@ -664,7 +677,16 @@ local function vig_run_github_update_from_settings()
 		end
 		apply_updates_from_manifest(m)
 		if not UpdateUi.need_script and not UpdateUi.need_articles then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} У вас уже актуальная версия.", message_color)
+			local loc = vig_version_trim(get_local_script_version())
+			local rem = vig_version_trim(m.current_version or "")
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Актуально. Скрипт у вас: "
+					.. loc
+					.. " | в VigUpdate.json: "
+					.. rem
+					.. ".",
+				message_color
+			)
 			UpdateUi.busy = false
 			return
 		end
@@ -693,6 +715,9 @@ local function vig_run_github_update_from_settings()
 							end
 							load_articles(true)
 							sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} VigArticles.json обновлён.", message_color)
+							if type(m.articles_info) == "string" and vig_version_trim(m.articles_info) ~= "" then
+								sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.articles_info, message_color)
+							end
 						else
 							sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Не удалось записать VigArticles.json.", message_color)
 						end
@@ -708,6 +733,87 @@ local function vig_run_github_update_from_settings()
 			start_download_script_thread()
 		else
 			UpdateUi.busy = false
+		end
+	end)
+end
+
+--- Только проверка VigUpdate.json — в чат версии и поля update_info / articles_info из манифеста.
+local function vig_check_updates_chat_only()
+	if UpdateUi.busy then
+		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Дождитесь окончания операции.", message_color)
+		return
+	end
+	UpdateUi.busy = true
+	lua_thread.create(function()
+		local m, err = fetch_update_manifest()
+		if not m then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Проверка: " .. tostring(err), message_color)
+			UpdateUi.busy = false
+			return
+		end
+		apply_updates_from_manifest(m)
+		local loc = vig_version_trim(get_local_script_version())
+		local rem = vig_version_trim(m.current_version or "")
+		if not UpdateUi.need_script and not UpdateUi.need_articles then
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Обновлений нет. Скрипт у вас: "
+					.. loc
+					.. " | в манифесте: "
+					.. rem
+					.. ".",
+				message_color
+			)
+			UpdateUi.busy = false
+			return
+		end
+		sampAddChatMessageUtf8(
+			"{009EFF}[gwarnn]{ffffff} Доступно обновление: у вас v."
+				.. loc
+				.. ", на GitHub v."
+				.. rem
+				.. ". Ниже — текст из VigUpdate.json.",
+			message_color
+		)
+		if type(m.update_info) == "string" and vig_version_trim(m.update_info) ~= "" then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.update_info, message_color)
+		end
+		if UpdateUi.need_articles and type(m.articles_info) == "string" and vig_version_trim(m.articles_info) ~= "" then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.articles_info, message_color)
+		end
+		UpdateUi.busy = false
+	end)
+end
+
+--- После приветствия — вторая/третья строка в чат, если на GitHub есть более новая версия.
+local function vig_delayed_update_hint_after_welcome()
+	if not lua_thread or not lua_thread.create then
+		return
+	end
+	lua_thread.create(function()
+		wait(4500)
+		local m, err = fetch_update_manifest()
+		if not m then
+			return
+		end
+		apply_updates_from_manifest(m)
+		if not UpdateUi.need_script and not UpdateUi.need_articles then
+			return
+		end
+		local loc = vig_version_trim(get_local_script_version())
+		local rem = vig_version_trim(m.current_version or "")
+		sampAddChatMessageUtf8(
+			"{009EFF}[gwarnn]{ffffff} Доступно обновление (у вас v."
+				.. loc
+				.. ", на GitHub v."
+				.. rem
+				.. "). Настройки → «Проверить» или «Обновить с GitHub».",
+			message_color
+		)
+		if type(m.update_info) == "string" and vig_version_trim(m.update_info) ~= "" then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.update_info, message_color)
+		end
+		if UpdateUi.need_articles and type(m.articles_info) == "string" and vig_version_trim(m.articles_info) ~= "" then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.articles_info, message_color)
 		end
 	end)
 end
@@ -1286,7 +1392,11 @@ function register_spec_imgui()
 					if UpdateUi.busy then
 						imgui.Text(im_utf8("Идёт загрузка…"))
 					else
-						if imgui.Button(im_utf8("Обновить с GitHub##vig_git_upd"), imgui.ImVec2(488 * custom_dpi, 32 * custom_dpi)) then
+						if imgui.Button(im_utf8("Проверить##vig_chk"), imgui.ImVec2(236 * custom_dpi, 30 * custom_dpi)) then
+							vig_check_updates_chat_only()
+						end
+						imgui.SameLine()
+						if imgui.Button(im_utf8("Обновить с GitHub##vig_git_upd"), imgui.ImVec2(236 * custom_dpi, 30 * custom_dpi)) then
 							vig_run_github_update_from_settings()
 						end
 					end
@@ -1508,6 +1618,7 @@ function main()
 	end
 
 	welcome_gwarn_message()
+	vig_delayed_update_hint_after_welcome()
 
 	while true do
 		wait(0)
