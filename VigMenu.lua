@@ -1111,7 +1111,7 @@ local function im_samp_nick(s)
 	return tostring(s or "")
 end
 
---- Как в Arizona Helper (safery_disable_cursor): без режима курсора чата — HideCursor=true, можно ходить и крутить камеру с открытым меню.
+--- Видимый курсор в меню; без sampToggleCursor (он блокирует ходьбу). Вариант safery_disable_cursor (HideCursor=true) на части сборок даёт пропажу курсора и залипание ввода — здесь всегда false при открытом меню.
 local function vig_apply_cursor_arizona(player)
 	if not SpecMenu.Window[0] then
 		return
@@ -1119,16 +1119,7 @@ local function vig_apply_cursor_arizona(player)
 	if not player then
 		return
 	end
-	local cursor_active = false
-	if sampIsCursorActive then
-		local ok, ca = pcall(sampIsCursorActive)
-		cursor_active = ok and ca
-	end
-	if cursor_active then
-		player.HideCursor = false
-	else
-		player.HideCursor = true
-	end
+	player.HideCursor = false
 end
 
 local function vig_spec_ensure_theme_once()
