@@ -1,8 +1,8 @@
 {
-  "current_version": "2.9.6",
-  "update_info": "Переименование файлов: VigMenu.lua, VigArticles.json, VigUpdate.json; папка данных VigMenu.",
-  "update_url": "https://raw.githubusercontent.com/Alex140219899/UK/main/VigMenu.lua",
+  "current_version": "2.9.7",
+  "update_info": "Репозиторий MENU: исправлены URL манифеста и скачивания на github.com/Alex140219899/MENU",
+  "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "1",
   "articles_info": "Обновление списка статей (VigArticles.json).",
-  "articles_url": "https://raw.githubusercontent.com/Alex140219899/UK/main/VigArticles.json"
+  "articles_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigArticles.json"
 }
