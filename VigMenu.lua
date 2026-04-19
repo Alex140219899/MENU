@@ -510,7 +510,6 @@ local function manifest_articles_needs_update(m)
 end
 
 local UpdateUi = {
-	Window = imgui.new.bool(),
 	busy = false,
 	need_script = false,
 	need_articles = false,
@@ -520,7 +519,6 @@ local UpdateUi = {
 	changelog_articles = "",
 	script_url = "",
 	articles_url = "",
-	status_text = "",
 }
 
 local function apply_updates_from_manifest(m)
@@ -590,106 +588,73 @@ local function start_download_script_thread()
 		out:close()
 		pcall(os.remove, tmp)
 		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Скрипт обновлён. Перезагрузка…", message_color)
-		UpdateUi.Window[0] = false
 		UpdateUi.busy = false
 		wait(400)
 		try_reload_script()
 	end)
 end
 
-local function start_download_articles_thread()
+--- Одна кнопка «Обновить» в настройках: качает статьи (если нужно), затем скрипт (если нужно). Без отдельного окна ImGui.
+local function vig_run_github_update_from_settings()
 	if UpdateUi.busy then
-		return
-	end
-	local m = last_manifest_cache
-	local url = (m and type(m.articles_url) == "string" and m.articles_url) or UpdateUi.articles_url or ""
-	if url == "" then
-		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} В манифесте нет articles_url.", message_color)
+		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Подождите, идёт загрузка…", message_color)
 		return
 	end
 	UpdateUi.busy = true
 	lua_thread.create(function()
-		local tmp = (worked_dir .. "/.gwarnn_new_articles.json"):gsub("\\", "/")
-		if doesFileExist(tmp) then
-			pcall(os.remove, tmp)
-		end
-		if not download_url_to_file_sync(tmp, url, 120) then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Ошибка скачивания VigArticles.json.", message_color)
+		local m, err = fetch_update_manifest()
+		if not m then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Не удалось получить VigUpdate.json: " .. tostring(err), message_color)
 			UpdateUi.busy = false
 			return
 		end
-		local f = io.open(tmp, "rb")
-		if not f then
+		apply_updates_from_manifest(m)
+		if not UpdateUi.need_script and not UpdateUi.need_articles then
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} У вас уже актуальная версия.", message_color)
 			UpdateUi.busy = false
 			return
 		end
-		local body = f:read("*a")
-		f:close()
-		SPEC_JSON_PATH = get_spec_json_path()
-		local out = io.open(SPEC_JSON_PATH, "wb")
-		if not out then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Не удалось записать VigArticles.json.", message_color)
+		if UpdateUi.need_articles then
+			local url = UpdateUi.articles_url
+			if url == "" then
+				sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} В манифесте нет articles_url.", message_color)
+			else
+				local tmp = (worked_dir .. "/.gwarnn_new_articles.json"):gsub("\\", "/")
+				if doesFileExist(tmp) then
+					pcall(os.remove, tmp)
+				end
+				if download_url_to_file_sync(tmp, url, 120) then
+					local f = io.open(tmp, "rb")
+					if f then
+						local body = f:read("*a")
+						f:close()
+						SPEC_JSON_PATH = get_spec_json_path()
+						local out = io.open(SPEC_JSON_PATH, "wb")
+						if out then
+							out:write(body or "")
+							out:close()
+							pcall(os.remove, tmp)
+							if m.articles_version ~= nil then
+								write_local_articles_version(tostring(m.articles_version))
+							end
+							load_articles(true)
+							sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} VigArticles.json обновлён.", message_color)
+						else
+							sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Не удалось записать VigArticles.json.", message_color)
+						end
+					end
+				else
+					sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Ошибка скачивания VigArticles.json.", message_color)
+				end
+			end
+			UpdateUi.need_articles = false
+		end
+		if UpdateUi.need_script then
 			UpdateUi.busy = false
-			return
+			start_download_script_thread()
+		else
+			UpdateUi.busy = false
 		end
-		out:write(body or "")
-		out:close()
-		pcall(os.remove, tmp)
-		if m and m.articles_version then
-			write_local_articles_version(tostring(m.articles_version))
-		end
-		load_articles(true)
-		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Статьи обновлены.", message_color)
-		UpdateUi.need_articles = false
-		UpdateUi.busy = false
-	end)
-end
-
-local function run_manifest_check_and_notify(is_quiet)
-	local m, err = fetch_update_manifest()
-	if not m then
-		UpdateUi.status_text = tostring(err)
-		if not is_quiet then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Обновления: " .. tostring(err), message_color)
-		end
-		return
-	end
-	apply_updates_from_manifest(m)
-	if not UpdateUi.need_script and not UpdateUi.need_articles then
-		UpdateUi.status_text = "Актуально."
-		if not is_quiet then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Обновлений нет.", message_color)
-		end
-		return
-	end
-	UpdateUi.status_text = ""
-	--- При авто-проверке при входе не открываем ImGui (нет мигания экрана/консоли); окно — только по «Проверить» в настройках.
-	if not is_quiet then
-		UpdateUi.Window[0] = true
-	end
-	if UpdateUi.need_script then
-		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Доступна новая версия скрипта.", message_color)
-	end
-	if UpdateUi.need_articles then
-		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Доступно обновление VigArticles.json.", message_color)
-	end
-	if is_quiet and (UpdateUi.need_script or UpdateUi.need_articles) then
-		sampAddChatMessageUtf8(
-			"{009EFF}[gwarnn]{ffffff} Скачать: /"
-				.. GWARN_MENU_CMD
-				.. " → шестерёнка → «Проверить» (или дождитесь ручной проверки).",
-			message_color
-		)
-	end
-end
-
-local function start_update_check_delayed()
-	if not lua_thread or not lua_thread.create then
-		return
-	end
-	lua_thread.create(function()
-		wait(3000)
-		run_manifest_check_and_notify(true)
 	end)
 end
 
@@ -1148,7 +1113,7 @@ end
 
 --- Как в Arizona Helper (safery_disable_cursor): без режима курсора чата — HideCursor=true, можно ходить и крутить камеру с открытым меню.
 local function vig_apply_cursor_arizona(player)
-	if not SpecMenu.Window[0] and not UpdateUi.Window[0] then
+	if not SpecMenu.Window[0] then
 		return
 	end
 	if not player then
@@ -1184,84 +1149,6 @@ function register_spec_imgui()
 	if spec_imgui_ready then
 		return
 	end
-	--- Отдельный OnFrame только для окна обновления (как Arizona Helper: MODULE.Update — свой OnFrame), без склейки с меню выговоров.
-	imgui.OnFrame(
-		function()
-			return UpdateUi.Window[0]
-		end,
-		function(player)
-			vig_apply_cursor_arizona(player)
-			vig_spec_ensure_theme_once()
-			if not UpdateUi.Window[0] then
-				return
-			end
-			imgui.SetNextWindowPos(imgui.ImVec2(sizeX / 2, sizeY / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
-			imgui.SetNextWindowSizeConstraints(
-				imgui.ImVec2(380 * custom_dpi, 0),
-				imgui.ImVec2(520 * custom_dpi, 420 * custom_dpi)
-			)
-			imgui.Begin(
-				im_utf8("Обновление##gwarn_upd"),
-				UpdateUi.Window,
-				imgui.WindowFlags.NoCollapse
-					+ imgui.WindowFlags.NoResize
-					+ imgui.WindowFlags.NoScrollbar
-					+ imgui.WindowFlags.AlwaysAutoResize
-			)
-			imgui.TextWrapped(
-				im_utf8(
-					"У вас: "
-						.. get_local_script_version()
-						.. " | в манифесте: "
-						.. (UpdateUi.remote_script_ver ~= "" and UpdateUi.remote_script_ver or "—")
-				)
-			)
-			if UpdateUi.need_script and UpdateUi.changelog_script ~= "" then
-				imgui.Separator()
-				imgui.TextWrapped(im_utf8(UpdateUi.changelog_script))
-			end
-			if UpdateUi.need_articles then
-				imgui.Separator()
-				imgui.TextWrapped(
-					im_utf8(
-						"Статьи: "
-							.. (read_local_articles_version() ~= "" and read_local_articles_version() or "не было")
-							.. " → "
-							.. (UpdateUi.remote_articles_ver ~= "" and UpdateUi.remote_articles_ver or "—")
-					)
-				)
-				if UpdateUi.changelog_articles ~= "" then
-					imgui.TextWrapped(im_utf8(UpdateUi.changelog_articles))
-				end
-			end
-			if UpdateUi.status_text ~= "" then
-				imgui.TextWrapped(im_utf8(UpdateUi.status_text))
-			end
-			imgui.Separator()
-			if UpdateUi.busy then
-				imgui.Text(im_utf8("Загрузка…"))
-			else
-				if UpdateUi.need_script then
-					if imgui.Button(im_utf8("Скачать скрипт##upd_lua"), imgui.ImVec2(200 * custom_dpi, 28 * custom_dpi)) then
-						start_download_script_thread()
-					end
-				end
-				if UpdateUi.need_articles then
-					if imgui.Button(im_utf8("Скачать статьи##upd_js"), imgui.ImVec2(200 * custom_dpi, 28 * custom_dpi)) then
-						start_download_articles_thread()
-					end
-				end
-				if imgui.Button(im_utf8("Позже##upd_lat"), imgui.ImVec2(120 * custom_dpi, 28 * custom_dpi)) then
-					UpdateUi.Window[0] = false
-				end
-				imgui.SameLine()
-				if imgui.Button(im_utf8("X##upd_x"), imgui.ImVec2(28 * custom_dpi, 28 * custom_dpi)) then
-					UpdateUi.Window[0] = false
-				end
-			end
-			imgui.End()
-		end
-	)
 	imgui.OnFrame(
 		function()
 			return SpecMenu.Window[0]
@@ -1331,7 +1218,7 @@ function register_spec_imgui()
 					)
 					end
 				end
-				imgui.SetNextWindowSize(imgui.ImVec2(520 * custom_dpi, 480 * custom_dpi), imgui.Cond.Appearing)
+				imgui.SetNextWindowSize(imgui.ImVec2(520 * custom_dpi, 540 * custom_dpi), imgui.Cond.Appearing)
 				if
 					imgui.BeginPopupModal(
 						"##gwarn_binder_modal",
@@ -1350,22 +1237,12 @@ function register_spec_imgui()
 						imgui.ImVec2(490 * custom_dpi, 270 * custom_dpi)
 					)
 					imgui.Separator()
-					imgui.TextWrapped(im_utf8("Обновления с GitHub (манифест VigUpdate.json):"))
-					if imgui.Button(im_utf8("Проверить##upd_manual"), imgui.ImVec2(130 * custom_dpi, 26 * custom_dpi)) then
-						run_manifest_check_and_notify(false)
-					end
-					imgui.SameLine()
-					if imgui.Button(im_utf8("Скачать статьи##upd_only_art"), imgui.ImVec2(160 * custom_dpi, 26 * custom_dpi)) then
-						local m, err = fetch_update_manifest()
-						if m then
-							apply_updates_from_manifest(m)
-							if UpdateUi.articles_url ~= "" then
-								start_download_articles_thread()
-							else
-								sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Нет articles_url в манифесте.", message_color)
-							end
-						else
-							sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} " .. tostring(err), message_color)
+					imgui.TextWrapped(im_utf8("Обновление с GitHub (VigUpdate.json). Скачивает статьи и/или скрипт, если в манифесте версия новее."))
+					if UpdateUi.busy then
+						imgui.Text(im_utf8("Идёт загрузка…"))
+					else
+						if imgui.Button(im_utf8("Обновить с GitHub##vig_git_upd"), imgui.ImVec2(488 * custom_dpi, 32 * custom_dpi)) then
+							vig_run_github_update_from_settings()
 						end
 					end
 					imgui.Separator()
@@ -1555,6 +1432,11 @@ function main()
 	while not isSampAvailable() do
 		wait(0)
 	end
+	if _G.VIGMENU_GWARNN_LOADED then
+		print("[gwarnn] Уже запущен другой VigMenu — удалите дубликат .lua из папки moonloader (два скрипта = два сообщения в чат).")
+		return
+	end
+	_G.VIGMENU_GWARNN_LOADED = true
 	print("[gwarnn] main() OK — сначала команды, затем ImGui (так /gwarnn работает даже при сбое темы)")
 
 	SPEC_JSON_PATH = get_spec_json_path()
@@ -1577,9 +1459,6 @@ function main()
 	if not imgui_ok then
 		print("[gwarnn] register_spec_imgui при старте: " .. tostring(imgui_err))
 		print("[gwarnn] Меню повторится при /gwarnn; проверьте mimgui")
-	else
-		--- Тихая проверка манифеста в фоне (без окна ImGui — только сообщения в чат при наличии обновления).
-		start_update_check_delayed()
 	end
 
 	welcome_gwarn_message()
@@ -1590,6 +1469,7 @@ function main()
 end
 
 function onScriptTerminate()
+	_G.VIGMENU_GWARNN_LOADED = nil
 	pcall(function()
 		local ok, hotkey = pcall(require, "mimgui_hotkeys")
 		if ok and hotkey and hotkey.RemoveHotKey then
