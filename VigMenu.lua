@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("2.9.8")
+script_version("2.9.9")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "2.9.8"
+local SCRIPT_VERSION_TEXT = "2.9.9"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -1146,8 +1146,8 @@ local function im_samp_nick(s)
 	return tostring(s or "")
 end
 
---- Как в Arizona Helper (safery_disable_cursor): без режима курсора чата — HideCursor=true, можно ходить и крутить камеру с открытым меню. sampToggleCursor не трогаем.
-local function vig_imgui_cursor_like_arizona(player)
+--- Как в Arizona Helper (safery_disable_cursor): без режима курсора чата — HideCursor=true, можно ходить и крутить камеру с открытым меню.
+local function vig_apply_cursor_arizona(player)
 	if not SpecMenu.Window[0] and not UpdateUi.Window[0] then
 		return
 	end
@@ -1166,90 +1166,109 @@ local function vig_imgui_cursor_like_arizona(player)
 	end
 end
 
+local function vig_spec_ensure_theme_once()
+	if spec_theme_lazy_done then
+		return
+	end
+	spec_theme_lazy_done = true
+	local ok, err = pcall(function()
+		imgui.SwitchContext()
+		apply_spec_dark_theme_core()
+	end)
+	if not ok then
+		print("[gwarnn] сбой темы в кадре: " .. tostring(err))
+	end
+end
+
 function register_spec_imgui()
 	if spec_imgui_ready then
 		return
 	end
+	--- Отдельный OnFrame только для окна обновления (как Arizona Helper: MODULE.Update — свой OnFrame), без склейки с меню выговоров.
 	imgui.OnFrame(
 		function()
-			return SpecMenu.Window[0] or UpdateUi.Window[0]
+			return UpdateUi.Window[0]
 		end,
 		function(player)
-			vig_imgui_cursor_like_arizona(player)
-			if not spec_theme_lazy_done then
-				spec_theme_lazy_done = true
-				local ok, err = pcall(function()
-					imgui.SwitchContext()
-					apply_spec_dark_theme_core()
-				end)
-				if not ok then
-					print("[gwarnn] сбой темы в кадре: " .. tostring(err))
-				end
+			vig_apply_cursor_arizona(player)
+			vig_spec_ensure_theme_once()
+			if not UpdateUi.Window[0] then
+				return
 			end
-			if UpdateUi.Window[0] then
-				imgui.SetNextWindowPos(imgui.ImVec2(sizeX / 2, sizeY / 2), imgui.Cond.Appearing, imgui.ImVec2(0.5, 0.5))
-				imgui.SetNextWindowSizeConstraints(
-					imgui.ImVec2(380 * custom_dpi, 0),
-					imgui.ImVec2(520 * custom_dpi, 420 * custom_dpi)
+			imgui.SetNextWindowPos(imgui.ImVec2(sizeX / 2, sizeY / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
+			imgui.SetNextWindowSizeConstraints(
+				imgui.ImVec2(380 * custom_dpi, 0),
+				imgui.ImVec2(520 * custom_dpi, 420 * custom_dpi)
+			)
+			imgui.Begin(
+				im_utf8("Обновление##gwarn_upd"),
+				UpdateUi.Window,
+				imgui.WindowFlags.NoCollapse
+					+ imgui.WindowFlags.NoResize
+					+ imgui.WindowFlags.NoScrollbar
+					+ imgui.WindowFlags.AlwaysAutoResize
+			)
+			imgui.TextWrapped(
+				im_utf8(
+					"У вас: "
+						.. get_local_script_version()
+						.. " | в манифесте: "
+						.. (UpdateUi.remote_script_ver ~= "" and UpdateUi.remote_script_ver or "—")
 				)
-				imgui.Begin(
-					im_utf8("Обновление##gwarn_upd"),
-					UpdateUi.Window,
-					imgui.WindowFlags.NoCollapse + imgui.WindowFlags.AlwaysAutoResize
-				)
+			)
+			if UpdateUi.need_script and UpdateUi.changelog_script ~= "" then
+				imgui.Separator()
+				imgui.TextWrapped(im_utf8(UpdateUi.changelog_script))
+			end
+			if UpdateUi.need_articles then
+				imgui.Separator()
 				imgui.TextWrapped(
 					im_utf8(
-						"У вас: "
-							.. get_local_script_version()
-							.. " | в манифесте: "
-							.. (UpdateUi.remote_script_ver ~= "" and UpdateUi.remote_script_ver or "—")
+						"Статьи: "
+							.. (read_local_articles_version() ~= "" and read_local_articles_version() or "не было")
+							.. " → "
+							.. (UpdateUi.remote_articles_ver ~= "" and UpdateUi.remote_articles_ver or "—")
 					)
 				)
-				if UpdateUi.need_script and UpdateUi.changelog_script ~= "" then
-					imgui.Separator()
-					imgui.TextWrapped(im_utf8(UpdateUi.changelog_script))
+				if UpdateUi.changelog_articles ~= "" then
+					imgui.TextWrapped(im_utf8(UpdateUi.changelog_articles))
+				end
+			end
+			if UpdateUi.status_text ~= "" then
+				imgui.TextWrapped(im_utf8(UpdateUi.status_text))
+			end
+			imgui.Separator()
+			if UpdateUi.busy then
+				imgui.Text(im_utf8("Загрузка…"))
+			else
+				if UpdateUi.need_script then
+					if imgui.Button(im_utf8("Скачать скрипт##upd_lua"), imgui.ImVec2(200 * custom_dpi, 28 * custom_dpi)) then
+						start_download_script_thread()
+					end
 				end
 				if UpdateUi.need_articles then
-					imgui.Separator()
-					imgui.TextWrapped(
-						im_utf8(
-							"Статьи: "
-								.. (read_local_articles_version() ~= "" and read_local_articles_version() or "не было")
-								.. " → "
-								.. (UpdateUi.remote_articles_ver ~= "" and UpdateUi.remote_articles_ver or "—")
-						)
-					)
-					if UpdateUi.changelog_articles ~= "" then
-						imgui.TextWrapped(im_utf8(UpdateUi.changelog_articles))
+					if imgui.Button(im_utf8("Скачать статьи##upd_js"), imgui.ImVec2(200 * custom_dpi, 28 * custom_dpi)) then
+						start_download_articles_thread()
 					end
 				end
-				if UpdateUi.status_text ~= "" then
-					imgui.TextWrapped(im_utf8(UpdateUi.status_text))
+				if imgui.Button(im_utf8("Позже##upd_lat"), imgui.ImVec2(120 * custom_dpi, 28 * custom_dpi)) then
+					UpdateUi.Window[0] = false
 				end
-				imgui.Separator()
-				if UpdateUi.busy then
-					imgui.Text(im_utf8("Загрузка…"))
-				else
-					if UpdateUi.need_script then
-						if imgui.Button(im_utf8("Скачать скрипт##upd_lua"), imgui.ImVec2(200 * custom_dpi, 28 * custom_dpi)) then
-							start_download_script_thread()
-						end
-					end
-					if UpdateUi.need_articles then
-						if imgui.Button(im_utf8("Скачать статьи##upd_js"), imgui.ImVec2(200 * custom_dpi, 28 * custom_dpi)) then
-							start_download_articles_thread()
-						end
-					end
-					if imgui.Button(im_utf8("Позже##upd_lat"), imgui.ImVec2(120 * custom_dpi, 28 * custom_dpi)) then
-						UpdateUi.Window[0] = false
-					end
-					imgui.SameLine()
-					if imgui.Button(im_utf8("X##upd_x"), imgui.ImVec2(28 * custom_dpi, 28 * custom_dpi)) then
-						UpdateUi.Window[0] = false
-					end
+				imgui.SameLine()
+				if imgui.Button(im_utf8("X##upd_x"), imgui.ImVec2(28 * custom_dpi, 28 * custom_dpi)) then
+					UpdateUi.Window[0] = false
 				end
-				imgui.End()
 			end
+			imgui.End()
+		end
+	)
+	imgui.OnFrame(
+		function()
+			return SpecMenu.Window[0]
+		end,
+		function(player)
+			vig_apply_cursor_arizona(player)
+			vig_spec_ensure_theme_once()
 			if not SpecMenu.Window[0] then
 				return
 			end
@@ -1559,6 +1578,7 @@ function main()
 		print("[gwarnn] register_spec_imgui при старте: " .. tostring(imgui_err))
 		print("[gwarnn] Меню повторится при /gwarnn; проверьте mimgui")
 	else
+		--- Тихая проверка манифеста в фоне (без окна ImGui — только сообщения в чат при наличии обновления).
 		start_update_check_delayed()
 	end
 
