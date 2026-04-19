@@ -571,6 +571,7 @@ end
 
 local function try_reload_script()
 	local reloaded = false
+	_G.VIGMENU_GWARNN_LOADED = nil
 	pcall(function()
 		local ts = thisScript and thisScript()
 		if ts and type(ts.reload) == "function" then
@@ -766,16 +767,24 @@ local function vig_check_updates_chat_only()
 			UpdateUi.busy = false
 			return
 		end
-		sampAddChatMessageUtf8(
-			"{009EFF}[gwarnn]{ffffff} Доступно обновление: у вас v."
-				.. loc
-				.. ", на GitHub v."
-				.. rem
-				.. ". Ниже — текст из VigUpdate.json.",
-			message_color
-		)
-		if type(m.update_info) == "string" and vig_version_trim(m.update_info) ~= "" then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.update_info, message_color)
+		if UpdateUi.need_script then
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Доступно обновление скрипта: у вас v."
+					.. loc
+					.. ", на GitHub v."
+					.. rem
+					.. ". Ниже — текст из VigUpdate.json.",
+				message_color
+			)
+			if type(m.update_info) == "string" and vig_version_trim(m.update_info) ~= "" then
+				sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.update_info, message_color)
+			end
+		end
+		if UpdateUi.need_articles and not UpdateUi.need_script then
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Доступно обновление только статей VigArticles.json.",
+				message_color
+			)
 		end
 		if UpdateUi.need_articles and type(m.articles_info) == "string" and vig_version_trim(m.articles_info) ~= "" then
 			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.articles_info, message_color)
@@ -801,16 +810,23 @@ local function vig_delayed_update_hint_after_welcome()
 		end
 		local loc = vig_version_trim(get_local_script_version())
 		local rem = vig_version_trim(m.current_version or "")
-		sampAddChatMessageUtf8(
-			"{009EFF}[gwarnn]{ffffff} Доступно обновление (у вас v."
-				.. loc
-				.. ", на GitHub v."
-				.. rem
-				.. "). Настройки → «Проверить» или «Обновить с GitHub».",
-			message_color
-		)
-		if type(m.update_info) == "string" and vig_version_trim(m.update_info) ~= "" then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.update_info, message_color)
+		if UpdateUi.need_script then
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Доступно обновление скрипта (у вас v."
+					.. loc
+					.. ", на GitHub v."
+					.. rem
+					.. "). Настройки → «Обновить с GitHub».",
+				message_color
+			)
+			if type(m.update_info) == "string" and vig_version_trim(m.update_info) ~= "" then
+				sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.update_info, message_color)
+			end
+		elseif UpdateUi.need_articles then
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Доступно обновление статей VigArticles.json. Настройки → «Обновить с GitHub».",
+				message_color
+			)
 		end
 		if UpdateUi.need_articles and type(m.articles_info) == "string" and vig_version_trim(m.articles_info) ~= "" then
 			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff}" .. m.articles_info, message_color)
