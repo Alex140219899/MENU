@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("3.0.6")
+script_version("3.0.7")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "3.0.6"
+local SCRIPT_VERSION_TEXT = "3.0.7"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -554,6 +554,9 @@ local UpdateUi = {
 	script_url = "",
 	articles_url = "",
 }
+
+-- Forward declaration: используется в функции обновления, которая объявлена выше фактической реализации.
+local load_articles
 
 local function apply_updates_from_manifest(m)
 	if not m then
@@ -1063,7 +1066,7 @@ local function ensure_json_file_exists()
 	end
 end
 
-local function load_articles(quiet)
+load_articles = function(quiet)
 	ensure_json_file_exists()
 	if not doesFileExist(SPEC_JSON_PATH) then
 		articles_data = {}
@@ -1584,7 +1587,7 @@ function welcome_gwarn_message()
 	sampAddChatMessageUtf8(
 		"{009EFF}[gwarnn]{ffffff} Создатель AlexBuhoi | версия "
 			.. ver_show
-			.. " | активация: включена",
+			.. " | FBI/INSD/DRAKE",
 		message_color
 	)
 	print("[gwarnn] AlexBuhoi | версия " .. ver_show .. " (файл) / константа " .. SCRIPT_VERSION_TEXT)
