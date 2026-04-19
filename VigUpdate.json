@@ -1,6 +1,6 @@
 {
   "current_version": "2.9.8",
-  "update_info": "Репозиторий MENU: исправлены URL манифеста и скачивания на github.com/Alex140219899/MENU",
+  "update_info": "Курсор как в Arizona Helper: движение с открытым меню. Авто-обновление без всплывающего окна при входе; mkdir без мигания консоли.",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "1",
   "articles_info": "Обновление списка статей (VigArticles.json).",

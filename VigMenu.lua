@@ -180,7 +180,14 @@ local function get_spec_data_dir()
 	return (worked_dir .. "/" .. VIG_DATA_DIR_NAME):gsub("\\", "/")
 end
 
+--- Один раз за сессию: без повторного os.execute (на Windows мигало консолью/cmd).
+local vig_spec_data_dir_ready = false
+
 local function ensure_spec_data_dir()
+	if vig_spec_data_dir_ready then
+		return
+	end
+	vig_spec_data_dir_ready = true
 	local d = get_spec_data_dir()
 	if type(createDirectory) == "function" then
 		pcall(createDirectory, d)
@@ -192,8 +199,6 @@ local function ensure_spec_data_dir()
 			end
 		end)
 	end
-	local win = d:gsub("/", "\\")
-	os.execute('mkdir "' .. win .. '" 2>nul')
 end
 
 local function spec_copy_file(src, dst)
@@ -344,8 +349,6 @@ local articles_data = {}
 local spec_target_id = 0
 local spec_menu_warned_invalid = false
 local spec_imgui_ready = false
-local spec_menu_samp_cursor_on = false
-
 local SpecMenu = {
 	Window = imgui.new.bool(),
 	input = imgui.new.char[256](),
@@ -660,12 +663,23 @@ local function run_manifest_check_and_notify(is_quiet)
 		return
 	end
 	UpdateUi.status_text = ""
-	UpdateUi.Window[0] = true
+	--- При авто-проверке при входе не открываем ImGui (нет мигания экрана/консоли); окно — только по «Проверить» в настройках.
+	if not is_quiet then
+		UpdateUi.Window[0] = true
+	end
 	if UpdateUi.need_script then
 		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Доступна новая версия скрипта.", message_color)
 	end
 	if UpdateUi.need_articles then
 		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Доступно обновление VigArticles.json.", message_color)
+	end
+	if is_quiet and (UpdateUi.need_script or UpdateUi.need_articles) then
+		sampAddChatMessageUtf8(
+			"{009EFF}[gwarnn]{ffffff} Скачать: /"
+				.. GWARN_MENU_CMD
+				.. " → шестерёнка → «Проверить» (или дождитесь ручной проверки).",
+			message_color
+		)
 	end
 end
 
@@ -1132,17 +1146,23 @@ local function im_samp_nick(s)
 	return tostring(s or "")
 end
 
---- While menu is open: show ImGui cursor + SAMP cursor. On close, first OnFrame callback runs with open=false and turns SAMP cursor off (second callback may not run).
-local function update_spec_menu_cursor_open(player)
+--- Как в Arizona Helper (safery_disable_cursor): без режима курсора чата — HideCursor=true, можно ходить и крутить камеру с открытым меню. sampToggleCursor не трогаем.
+local function vig_imgui_cursor_like_arizona(player)
 	if not SpecMenu.Window[0] and not UpdateUi.Window[0] then
 		return
 	end
-	if player then
-		player.HideCursor = false
+	if not player then
+		return
 	end
-	if sampToggleCursor and not spec_menu_samp_cursor_on then
-		pcall(sampToggleCursor, true)
-		spec_menu_samp_cursor_on = true
+	local cursor_active = false
+	if sampIsCursorActive then
+		local ok, ca = pcall(sampIsCursorActive)
+		cursor_active = ok and ca
+	end
+	if cursor_active then
+		player.HideCursor = false
+	else
+		player.HideCursor = true
 	end
 end
 
@@ -1152,17 +1172,10 @@ function register_spec_imgui()
 	end
 	imgui.OnFrame(
 		function()
-			local open = SpecMenu.Window[0] or UpdateUi.Window[0]
-			if not open and spec_menu_samp_cursor_on then
-				if sampToggleCursor then
-					pcall(sampToggleCursor, false)
-				end
-				spec_menu_samp_cursor_on = false
-			end
-			return open
+			return SpecMenu.Window[0] or UpdateUi.Window[0]
 		end,
 		function(player)
-			update_spec_menu_cursor_open(player)
+			vig_imgui_cursor_like_arizona(player)
 			if not spec_theme_lazy_done then
 				spec_theme_lazy_done = true
 				local ok, err = pcall(function()
@@ -1557,10 +1570,6 @@ function main()
 end
 
 function onScriptTerminate()
-	if sampToggleCursor and spec_menu_samp_cursor_on then
-		pcall(sampToggleCursor, false)
-		spec_menu_samp_cursor_on = false
-	end
 	pcall(function()
 		local ok, hotkey = pcall(require, "mimgui_hotkeys")
 		if ok and hotkey and hotkey.RemoveHotKey then
