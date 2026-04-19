@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("3.0.9")
+script_version("3.0.10")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "3.0.9"
+local SCRIPT_VERSION_TEXT = "3.0.10"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -1356,6 +1356,15 @@ function register_spec_imgui()
 				imgui.TextWrapped(
 					im_utf8("Отредактируйте VigArticles.json, сохраните файл, затем /" .. GWARN_RELOAD_CMD)
 				)
+				imgui.Spacing()
+				imgui.TextWrapped(im_utf8("Или нажмите кнопку ниже, чтобы автоматически скачать статьи и обновления с GitHub."))
+				if UpdateUi.busy then
+					imgui.Text(im_utf8("Загрузка…"))
+				else
+					if imgui.Button(im_utf8("Скачать статьи с GitHub##empty_sync"), imgui.ImVec2(260 * custom_dpi, 30 * custom_dpi)) then
+						vig_run_github_update_from_settings()
+					end
+				end
 				imgui.Separator()
 				imgui.TextWrapped(im_utf8("ID игрока: ") .. tostring(spec_target_id))
 				if imgui.Button(im_utf8("Закрыть##empty"), imgui.ImVec2(140 * custom_dpi, 28 * custom_dpi)) then
