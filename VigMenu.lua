@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("3.0.2")
+script_version("3.0.4")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "3.0.2"
+local SCRIPT_VERSION_TEXT = "3.0.4"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -390,7 +390,32 @@ local function decode_json_str(s)
 	end
 end
 
+--- Версия из файла на диске (после скачивания/перезагрузки MoonLoader часто оставляет старый thisScript().version).
+local function vig_read_script_version_from_path(path)
+	path = tostring(path or "")
+	if path == "" then
+		return nil
+	end
+	for _, pv in ipairs({ path, path:gsub("\\", "/"), path:gsub("/", "\\") }) do
+		local f = io.open(pv, "rb")
+		if f then
+			local head = f:read(65536) or ""
+			f:close()
+			local v = head:match("script_version%s*%(%s*[\"']([^\"']+)[\"']%s*%)")
+			if v and v ~= "" then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
 local function get_local_script_version()
+	local p = thisScript and thisScript().path
+	local from_disk = p and vig_read_script_version_from_path(p)
+	if from_disk then
+		return from_disk
+	end
 	if thisScript and thisScript().version and tostring(thisScript().version) ~= "" then
 		return tostring(thisScript().version)
 	end
@@ -536,13 +561,25 @@ local function apply_updates_from_manifest(m)
 end
 
 local function try_reload_script()
+	local reloaded = false
+	pcall(function()
+		local ts = thisScript and thisScript()
+		if ts and type(ts.reload) == "function" then
+			ts:reload()
+			reloaded = true
+		end
+	end)
+	if reloaded then
+		return
+	end
 	pcall(function()
 		local ml = package.loaded["moonloader"] or require("moonloader")
 		if ml and type(ml.reload_script) == "function" and thisScript and thisScript().path then
 			ml.reload_script(thisScript().path)
+			reloaded = true
 		end
 	end)
-	if type(reloadScript) == "function" then
+	if not reloaded and type(reloadScript) == "function" then
 		pcall(reloadScript)
 	end
 end
@@ -578,18 +615,35 @@ local function start_download_script_thread()
 		end
 		local body = f:read("*a")
 		f:close()
-		local out = io.open(sp:gsub("\\", "/"), "wb")
+		local new_ver = (body or ""):match("script_version%s*%(%s*[\"']([^\"']+)[\"']%s*%)")
+		local target = tostring(sp)
+		local out = io.open(target, "wb") or io.open(target:gsub("/", "\\"), "wb")
+		if not out then
+			out = io.open(target:gsub("\\", "/"), "wb")
+		end
 		if not out then
 			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Не удалось записать .lua (права?).", message_color)
 			UpdateUi.busy = false
 			return
 		end
 		out:write(body or "")
+		if out.flush then
+			pcall(out.flush, out)
+		end
 		out:close()
 		pcall(os.remove, tmp)
-		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Скрипт обновлён. Перезагрузка…", message_color)
+		if new_ver and new_ver ~= "" then
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Записан VigMenu.lua, версия в файле: "
+					.. new_ver
+					.. ". Перезагрузка…",
+				message_color
+			)
+		else
+			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Скрипт записан. Перезагрузка…", message_color)
+		end
 		UpdateUi.busy = false
-		wait(400)
+		wait(900)
 		try_reload_script()
 	end)
 end
@@ -1400,13 +1454,14 @@ local function start_reregister_and_hooks_loop()
 end
 
 function welcome_gwarn_message()
+	local ver_show = vig_read_script_version_from_path(thisScript and thisScript().path) or SCRIPT_VERSION_TEXT
 	sampAddChatMessageUtf8(
 		"{009EFF}[gwarnn]{ffffff} Создатель AlexBuhoi | версия "
-			.. SCRIPT_VERSION_TEXT
+			.. ver_show
 			.. " | активация: включена",
 		message_color
 	)
-	print("[gwarnn] AlexBuhoi | версия " .. SCRIPT_VERSION_TEXT)
+	print("[gwarnn] AlexBuhoi | версия " .. ver_show .. " (файл) / константа " .. SCRIPT_VERSION_TEXT)
 	print("[gwarnn] папка данных: " .. get_spec_data_dir())
 	print("[gwarnn] VigArticles.json: " .. SPEC_JSON_PATH)
 	print("[gwarnn] манифест обновлений: " .. UPDATE_MANIFEST_URL)
