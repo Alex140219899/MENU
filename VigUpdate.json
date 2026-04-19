@@ -1,8 +1,8 @@
 {
-  "current_version": "3.0.7",
+  "current_version": "3.0.8",
   "update_info": "Текст из VigUpdate.json (поле update_info) — показывается в чате при проверке/обновлении и после скачивания скрипта.",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
-  "articles_version": "3",
+  "articles_version": "4",
   "articles_info": "Текст про статьи VigArticles.json (поле articles_info) — в чате при проверке и после обновления статей.",
   "articles_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigArticles.json"
 }
