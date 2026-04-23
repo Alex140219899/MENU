@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("3.0.12")
+script_version("4.0.0")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "3.0.12"
+local SCRIPT_VERSION_TEXT = "4.0.0"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -871,8 +871,15 @@ local function utf8_to_charbuf(str, buf, max_bytes)
 	end
 end
 
+--- ImGui пишет NUL в конец строки, но не затирает байты после него. Чтение ffi.string(buf, max)
+--- и удаление всех %z склеивало «хвост» старого текста — очищенная отыгровка снова попадала в сохранение.
 local function charbuf_to_utf8(buf, max_bytes)
-	return (ffi.string(buf, max_bytes):gsub("%z", "")):match("^%s*(.-)%s*$") or ""
+	local raw = ffi.string(buf, max_bytes)
+	local z = raw:find("\0", 1, true)
+	if z then
+		raw = raw:sub(1, z - 1)
+	end
+	return (raw:gsub("%z", "")):match("^%s*(.-)%s*$") or ""
 end
 
 local function binder_ui_sync_from_runtime()
