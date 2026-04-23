@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("4.0.0")
+script_version("4.0.1")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "4.0.0"
+local SCRIPT_VERSION_TEXT = "4.0.1"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -370,11 +370,14 @@ local gwarn_binder = {
 
 local SPEC_BINDER_JSON_PATH = ""
 
---- After SpecMenu exists; safe ffi.string(..., 256) + trim (fixes empty list filter bug)
+--- ImGui обнуляет только префикс до NUL; ffi.string(buf,256)+gsub("%z") склеивал хвост — «пустой» поиск оставлял старый мусор и скрывал все статьи до перезапуска.
 local function normalize_search_input()
-	local raw = ffi.string(SpecMenu.input, 256):gsub("%z", "")
-	raw = raw:match("^%s*(.-)%s*$") or ""
-	return raw
+	local raw = ffi.string(SpecMenu.input, 256)
+	local z = raw:find("\0", 1, true)
+	if z then
+		raw = raw:sub(1, z - 1)
+	end
+	return (raw:gsub("%z", "")):match("^%s*(.-)%s*$") or ""
 end
 
 local function decode_json_str(s)
