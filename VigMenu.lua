@@ -490,12 +490,21 @@ local function fetch_update_manifest()
 	if doesFileExist(tmp) then
 		pcall(os.remove, tmp)
 	end
-	local urls = { UPDATE_MANIFEST_URL }
+	--- Сырой GitHub кэширует ответ; без параметра игра может видеть старый current_version сразу после пуша.
+	local function manifest_url_with_bust(base)
+		base = tostring(base or "")
+		if base == "" then
+			return base
+		end
+		local sep = base:find("?", 1, true) and "&" or "?"
+		return base .. sep .. "t=" .. tostring(os.time())
+	end
+	local urls = { manifest_url_with_bust(UPDATE_MANIFEST_URL) }
 	local u = UPDATE_MANIFEST_URL
 	if u:find("/main/", 1, true) then
-		urls[#urls + 1] = u:gsub("/main/", "/master/", 1)
+		urls[#urls + 1] = manifest_url_with_bust(u:gsub("/main/", "/master/", 1))
 	elseif u:find("/master/", 1, true) then
-		urls[#urls + 1] = u:gsub("/master/", "/main/", 1)
+		urls[#urls + 1] = manifest_url_with_bust(u:gsub("/master/", "/main/", 1))
 	end
 	local last_err = "не удалось скачать манифест"
 	for _, manifest_url in ipairs(urls) do
