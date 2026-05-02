@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("4.0.3")
+script_version("4.0.4")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,9 +169,13 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "4.0.3"
+local SCRIPT_VERSION_TEXT = "4.0.4"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
+--- Тот же репозиторий через jsDelivr: у части игроков WinInet с игры не получает raw.githubusercontent.com (таймаут без колбэка).
+local UPDATE_MANIFEST_URL_JS = "https://cdn.jsdelivr.net/gh/Alex140219899/MENU@main/VigUpdate.json"
+local VIGARTICLES_URL_JS = "https://cdn.jsdelivr.net/gh/Alex140219899/MENU@main/VigArticles.json"
+local UPDATE_SCRIPT_URL_JS = "https://cdn.jsdelivr.net/gh/Alex140219899/MENU@main/VigMenu.lua"
 
 --- Постоянная папка данных внутри moonloader (не перезаписывается при обновлении .lua).
 local VIG_DATA_DIR_NAME = "VigMenu"
@@ -475,8 +479,9 @@ local function download_url_to_file_sync(dest, url, timeout_sec)
 	end
 	local done, ok = false, false
 	pcall(function()
-		downloadUrlToFile(url, dest, function(_, status)
-			if status == st.STATUS_ENDDOWNLOADDATA then
+		downloadUrlToFile(url, dest, function(_id, status, _p1, _p2)
+			--- wiki.blast.hk: успех часто = 6; на части сборок константа может не совпасть с типом status
+			if status == st.STATUS_ENDDOWNLOADDATA or tonumber(status) == 6 then
 				ok = true
 				done = true
 			elseif st.STATUS_ENDDOWNLOADERR ~= nil and status == st.STATUS_ENDDOWNLOADERR then
@@ -507,13 +512,25 @@ local function download_url_to_file_sync(dest, url, timeout_sec)
 	return ok and doesFileExist(dest)
 end
 
+local function vig_urls_dedupe(urls)
+	local seen, out = {}, {}
+	for _, u in ipairs(urls) do
+		u = tostring(u or ""):match("^%s*(.-)%s*$") or ""
+		if u ~= "" and not seen[u] then
+			seen[u] = true
+			out[#out + 1] = u
+		end
+	end
+	return out
+end
+
 local function fetch_update_manifest()
 	local tmp = (worked_dir .. "/.gwarnn_manifest_tmp.json"):gsub("\\", "/")
 	if doesFileExist(tmp) then
 		pcall(os.remove, tmp)
 	end
-	--- Сырой GitHub кэширует ответ; без параметра игра может видеть старый current_version сразу после пуша.
-	local function manifest_url_with_bust(base)
+	--- Сначала «чистый» URL: часть WinInet/прокси ломает запрос с ?t=…
+	local function url_with_bust(base)
 		base = tostring(base or "")
 		if base == "" then
 			return base
@@ -521,19 +538,28 @@ local function fetch_update_manifest()
 		local sep = base:find("?", 1, true) and "&" or "?"
 		return base .. sep .. "t=" .. tostring(os.time())
 	end
-	local urls = { manifest_url_with_bust(UPDATE_MANIFEST_URL) }
+	local raw_urls = {}
 	local u = UPDATE_MANIFEST_URL
+	raw_urls[#raw_urls + 1] = u
+	raw_urls[#raw_urls + 1] = url_with_bust(u)
 	if u:find("/main/", 1, true) then
-		urls[#urls + 1] = manifest_url_with_bust(u:gsub("/main/", "/master/", 1))
+		local m = u:gsub("/main/", "/master/", 1)
+		raw_urls[#raw_urls + 1] = m
+		raw_urls[#raw_urls + 1] = url_with_bust(m)
 	elseif u:find("/master/", 1, true) then
-		urls[#urls + 1] = manifest_url_with_bust(u:gsub("/master/", "/main/", 1))
+		local m = u:gsub("/master/", "/main/", 1)
+		raw_urls[#raw_urls + 1] = m
+		raw_urls[#raw_urls + 1] = url_with_bust(m)
 	end
-	local last_err = "не удалось скачать манифест"
+	raw_urls[#raw_urls + 1] = UPDATE_MANIFEST_URL_JS
+	raw_urls[#raw_urls + 1] = url_with_bust(UPDATE_MANIFEST_URL_JS)
+	local urls = vig_urls_dedupe(raw_urls)
+	local last_err = "не удалось скачать манифест (GitHub и зеркало)"
 	for _, manifest_url in ipairs(urls) do
 		if doesFileExist(tmp) then
 			pcall(os.remove, tmp)
 		end
-		if download_url_to_file_sync(tmp, manifest_url, 45) then
+		if download_url_to_file_sync(tmp, manifest_url, 55) then
 			local f = io.open(tmp, "r")
 			if f then
 				local txt = f:read("*a") or ""
@@ -647,8 +673,25 @@ local function start_download_script_thread()
 		if doesFileExist(tmp) then
 			pcall(os.remove, tmp)
 		end
-		if not download_url_to_file_sync(tmp, url, 120) then
-			sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Ошибка скачивания скрипта.", message_color)
+		local script_urls = vig_urls_dedupe({ url, UPDATE_SCRIPT_URL_JS })
+		local dl_ok = false
+		for _, su in ipairs(script_urls) do
+			if doesFileExist(tmp) then
+				pcall(os.remove, tmp)
+			end
+			if download_url_to_file_sync(tmp, su, 120) then
+				dl_ok = true
+				if su ~= url then
+					print("[gwarnn] VigMenu.lua: успех с зеркала jsDelivr")
+				end
+				break
+			end
+		end
+		if not dl_ok then
+			sampAddChatMessageUtf8(
+				"{009EFF}[gwarnn]{ffffff} Ошибка скачивания скрипта (GitHub и зеркало).",
+				message_color
+			)
 			UpdateUi.busy = false
 			return
 		end
@@ -739,7 +782,21 @@ local function vig_run_github_update_from_settings(opts)
 				if doesFileExist(tmp) then
 					pcall(os.remove, tmp)
 				end
-				if download_url_to_file_sync(tmp, url, 120) then
+				local au_list = vig_urls_dedupe({ url, VIGARTICLES_URL_JS })
+				local dl_ok = false
+				for _, au in ipairs(au_list) do
+					if doesFileExist(tmp) then
+						pcall(os.remove, tmp)
+					end
+					if download_url_to_file_sync(tmp, au, 120) then
+						dl_ok = true
+						if au ~= url then
+							print("[gwarnn] VigArticles.json: успех с зеркала jsDelivr")
+						end
+						break
+					end
+				end
+				if dl_ok then
 					local f = io.open(tmp, "rb")
 					if f then
 						local body = f:read("*a")
@@ -763,7 +820,10 @@ local function vig_run_github_update_from_settings(opts)
 						end
 					end
 				else
-					sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Ошибка скачивания VigArticles.json.", message_color)
+					sampAddChatMessageUtf8(
+						"{009EFF}[gwarnn]{ffffff} Ошибка скачивания VigArticles.json (GitHub и зеркало).",
+						message_color
+					)
 				end
 			end
 			UpdateUi.need_articles = false
