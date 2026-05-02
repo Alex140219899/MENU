@@ -11,7 +11,7 @@
 script_name("Меню выговоров (Vig)")
 script_description("Меню /gwarn: /gwarnn [id] → команда /gwarn")
 script_author("AlexBuhoi")
-script_version("4.0.2")
+script_version("4.0.3")
 
 require("lib.moonloader")
 require("encoding").default = "CP1251"
@@ -169,7 +169,7 @@ local sizeX, sizeY = getScreenResolution()
 
 local worked_dir = getWorkingDirectory():gsub("\\", "/")
 --- Синхронно с script_version() ниже (только приветствие / лог)
-local SCRIPT_VERSION_TEXT = "4.0.2"
+local SCRIPT_VERSION_TEXT = "4.0.3"
 --- Манифест: VigUpdate.json в репозитории на GitHub (ветка main/master).
 local UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigUpdate.json"
 
@@ -464,17 +464,22 @@ local last_manifest_cache = nil
 
 local function download_url_to_file_sync(dest, url, timeout_sec)
 	if type(downloadUrlToFile) ~= "function" then
+		print("[gwarnn] downloadUrlToFile недоступна (старая сборка MoonLoader?)")
 		return false
 	end
 	local ml = package.loaded["moonloader"] or require("moonloader")
-	local st = ml.download_status
+	local st = ml and ml.download_status
+	if not st or st.STATUS_ENDDOWNLOADDATA == nil then
+		print("[gwarnn] moonloader.download_status недоступен — загрузка с URL не работает")
+		return false
+	end
 	local done, ok = false, false
 	pcall(function()
 		downloadUrlToFile(url, dest, function(_, status)
 			if status == st.STATUS_ENDDOWNLOADDATA then
 				ok = true
 				done = true
-			elseif st.STATUS_ENDDOWNLOADERR and status == st.STATUS_ENDDOWNLOADERR then
+			elseif st.STATUS_ENDDOWNLOADERR ~= nil and status == st.STATUS_ENDDOWNLOADERR then
 				ok = false
 				done = true
 			end
@@ -484,6 +489,20 @@ local function download_url_to_file_sync(dest, url, timeout_sec)
 	while not done and n < lim do
 		wait(100)
 		n = n + 1
+	end
+	if not done then
+		print(
+			"[gwarnn] таймаут загрузки ("
+				.. tostring(timeout_sec or 60)
+				.. " с), колбэк не завершился: "
+				.. tostring(url)
+		)
+		pcall(sampAddChatMessageUtf8, "{009EFF}[gwarnn]{ffffff} Таймаут загрузки (сеть / GitHub). См. консоль MoonLoader.", message_color)
+		pcall(os.remove, dest)
+		return false
+	end
+	if not ok then
+		print("[gwarnn] загрузка завершилась с ошибкой: " .. tostring(url))
 	end
 	return ok and doesFileExist(dest)
 end
@@ -678,7 +697,9 @@ local function start_download_script_thread()
 end
 
 --- Одна кнопка «Обновить» в настройках: качает статьи (если нужно), затем скрипт (если нужно). Без отдельного окна ImGui.
-local function vig_run_github_update_from_settings()
+--- opts.force_articles: из пустого меню — всегда скачать VigArticles.json, даже если articles_version совпадает (локально пусто/битый файл).
+local function vig_run_github_update_from_settings(opts)
+	opts = type(opts) == "table" and opts or {}
 	if UpdateUi.busy then
 		sampAddChatMessageUtf8("{009EFF}[gwarnn]{ffffff} Подождите, идёт загрузка…", message_color)
 		return
@@ -692,6 +713,9 @@ local function vig_run_github_update_from_settings()
 			return
 		end
 		apply_updates_from_manifest(m)
+		if opts.force_articles and type(m.articles_url) == "string" and vig_version_trim(m.articles_url) ~= "" then
+			UpdateUi.need_articles = true
+		end
 		if not UpdateUi.need_script and not UpdateUi.need_articles then
 			local loc = vig_version_trim(get_local_script_version())
 			local rem = vig_version_trim(m.current_version or "")
@@ -1381,7 +1405,7 @@ function register_spec_imgui()
 					imgui.Text(im_utf8("Загрузка…"))
 				else
 					if imgui.Button(im_utf8("Скачать статьи с GitHub##empty_sync"), imgui.ImVec2(260 * custom_dpi, 30 * custom_dpi)) then
-						vig_run_github_update_from_settings()
+						vig_run_github_update_from_settings({ force_articles = true })
 					end
 				end
 				imgui.Separator()
