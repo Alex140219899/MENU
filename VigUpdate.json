@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.48",
-  "update_info": "При первом запуске модули VigMenu/ скачиваются с GitHub автоматически (без jsDelivr)",
+  "current_version": "5.2.49",
+  "update_info": "Ключ только VIGM-XXXX-XXXX-XXXX; при отзыве/смене в боте локальные данные полностью удаляются",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
