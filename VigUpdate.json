@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.37",
-  "update_info": "Fix: модули видят LicenseState через _G (loadfile)",
+  "current_version": "5.2.38",
+  "update_info": "Окно активации: блоки, закрытие по крестику и кнопке «Закрыть»",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
