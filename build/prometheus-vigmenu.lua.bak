@@ -1,4 +1,4 @@
--- VigMenu: Lua 5.1 max 200 locals/chunk — модули отдельно, без WrapInFunction.
+-- VigMenu: Medium без Vmify (Vmify падает на большом MoonLoader-скрипте).
 return {
 	LuaVersion = "Lua51",
 	VarNamePrefix = "",
@@ -24,5 +24,6 @@ return {
 			},
 		},
 		{ Name = "NumbersToExpressions", Settings = {} },
+		{ Name = "WrapInFunction", Settings = {} },
 	},
 }

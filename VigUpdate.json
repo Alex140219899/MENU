@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.35",
-  "update_info": "Окно ключа при входе как Arizona Helper; после активации — автообновление",
+  "current_version": "5.2.36",
+  "update_info": "Исправлен запуск: модули VigMenuLicense/Update (лимит Lua 200 locals)",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",

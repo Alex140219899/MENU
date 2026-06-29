@@ -3,96 +3,72 @@ chcp 65001 >nul
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "SRC=src\VigMenu.lua"
-set "OUT=VigMenu.lua"
-set "TMP=build\.vigmenu.obf.tmp.lua"
 set "CFG=build\prometheus-vigmenu.lua"
+set "LUA="
+if defined LUA_BIN set "LUA=!LUA_BIN!"
+if not defined LUA if exist "tools\lua\lua.exe" set "LUA=tools\lua\lua.exe"
+if not defined LUA where lua >nul 2>&1 && set "LUA=lua"
+if not defined LUA where luajit >nul 2>&1 && set "LUA=luajit"
 
-if not exist "%SRC%" (
-    echo [build] Ошибка: нет %SRC%
-    echo         Редактируйте только src\VigMenu.lua
+set "PH="
+if defined PROMETHEUS_HOME if exist "!PROMETHEUS_HOME!\cli.lua" set "PH=!PROMETHEUS_HOME!"
+if not defined PH if exist "tools\Prometheus\cli.lua" set "PH=tools\Prometheus"
+
+if not defined PH (
+    echo [build] Prometheus не найден. setup-prometheus.bat
+    exit /b 1
+)
+if not defined LUA (
+    echo [build] Нужен Lua 5.1 — install-lua.bat или LUA_BIN=
     exit /b 1
 )
 
-where prometheus-lua >nul 2>&1
-if not errorlevel 1 (
-    echo [build] prometheus-lua ...
-    if exist "%CFG%" (
-        prometheus-lua --Lua51 --nocolors --config "%CFG%" --out "%TMP%" "%SRC%"
-    ) else (
-        prometheus-lua --Lua51 --preset Medium --nocolors --out "%TMP%" "%SRC%"
-    )
-    if errorlevel 1 goto fail
-    goto prepend
-)
-
-set "PH="
-if defined PROMETHEUS_HOME (
-    if exist "!PROMETHEUS_HOME!\cli.lua" set "PH=!PROMETHEUS_HOME!"
-)
-if not defined PH if exist "tools\Prometheus\cli.lua" set "PH=tools\Prometheus"
-
-if defined PH (
-    set "LUA="
-    if defined LUA_BIN set "LUA=!LUA_BIN!"
-    if not defined LUA if exist "tools\lua\lua.exe" set "LUA=tools\lua\lua.exe"
-    if not defined LUA (
-        where lua >nul 2>&1 && set "LUA=lua"
-    )
-    if not defined LUA (
-        where luajit >nul 2>&1 && set "LUA=luajit"
-    )
-    if not defined LUA (
-        echo [build] Нужен Lua 5.1 или LuaJIT в PATH, либо переменная LUA_BIN=путь\lua.exe
-        exit /b 1
-    )
-    echo [build] !PH!\cli.lua ...
-    if exist "%CFG%" (
-        "!LUA!" "!PH!\cli.lua" --Lua51 --nocolors --config "%CFG%" --out "%TMP%" "%SRC%"
-    ) else (
-        "!LUA!" "!PH!\cli.lua" --Lua51 --preset Medium --nocolors --out "%TMP%" "%SRC%"
-    )
-    if errorlevel 1 goto fail
-    goto prepend
-)
-
-echo.
-echo [build] Prometheus не найден.
-echo.
-echo   1^) setup-prometheus.bat
-echo   2^) install-lua.bat
-echo   3^) build.bat
-echo.
-echo Исходник: src\VigMenu.lua   Релиз для GitHub: %OUT% ^(после obf^)
-exit /b 1
-
-:prepend
 if not exist "build" mkdir "build"
-if not exist "%TMP%" goto fail
-powershell -NoProfile -ExecutionPolicy Bypass -File "build\prepend-headers.ps1" -Source "%SRC%" -Obfuscated "%TMP%" -Out "%OUT%"
-if errorlevel 1 goto fail
-del /Q "%TMP%" >nul 2>&1
+if not exist "VigMenu" mkdir "VigMenu"
 
-:verify
-if not exist "%OUT%" goto fail
-findstr /C:"РАЗРАБОТКА" "%OUT%" >nul 2>&1
-if not errorlevel 1 goto fail
-findstr /C:"return(function" "%OUT%" >nul 2>&1
+call :obf_one "src\VigMenu.lua" "build\.vigmenu.obf.tmp.lua" main
 if errorlevel 1 goto fail
-findstr /C:"script_version(" "%OUT%" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -File "build\prepend-headers.ps1" -Source "src\VigMenu.lua" -Obfuscated "build\.vigmenu.obf.tmp.lua" -Out "VigMenu.lua"
 if errorlevel 1 goto fail
-goto success
+del /Q "build\.vigmenu.obf.tmp.lua" >nul 2>&1
+
+call :obf_one "src\VigMenuLicense.lua" "VigMenu\VigMenuLicense.lua" mod
+if errorlevel 1 goto fail
+call :obf_one "src\VigMenuUpdate.lua" "VigMenu\VigMenuUpdate.lua" mod
+if errorlevel 1 goto fail
+
+"!LUA!" -e "for _,p in ipairs({'VigMenu.lua','VigMenu/VigMenuLicense.lua','VigMenu/VigMenuUpdate.lua'}) do local f,e=loadfile(p); if not f then print('[build] Lua compile FAIL: '..p..': '..tostring(e)); os.exit(1) end end; print('[build] Lua compile OK (3 files)')"
+if errorlevel 1 goto fail
+
+findstr /C:"РАЗРАБОТКА" "VigMenu.lua" >nul 2>&1 && goto fail
+findstr /C:"script_version(" "VigMenu.lua" >nul 2>&1 || goto fail
+
+echo.
+echo [build] Готово:
+for %%A in ("VigMenu.lua") do echo   VigMenu.lua ^(%%~zA байт^)
+for %%A in ("VigMenu\VigMenuLicense.lua") do echo   VigMenu\VigMenuLicense.lua ^(%%~zA байт^)
+for %%A in ("VigMenu\VigMenuUpdate.lua") do echo   VigMenu\VigMenuUpdate.lua ^(%%~zA байт^)
+echo.
+echo Положите в moonloader: VigMenu.lua + папка VigMenu\ с двумя модулями.
+echo Push: VigMenu.lua, VigMenu\*.lua, VigUpdate.json
+exit /b 0
+
+:obf_one
+set "OBF_IN=%~1"
+set "OBF_OUT=%~2"
+if not exist "%OBF_IN%" (
+    echo [build] Нет %OBF_IN%
+    exit /b 1
+)
+echo [build] obf %OBF_IN% ...
+if exist "%CFG%" (
+    "!LUA!" "!PH!\cli.lua" --Lua51 --nocolors --config "%CFG%" --out "%OBF_OUT%" "%OBF_IN%"
+) else (
+    "!LUA!" "!PH!\cli.lua" --Lua51 --preset Medium --nocolors --out "%OBF_OUT%" "%OBF_IN%"
+)
+if errorlevel 1 exit /b 1
+exit /b 0
 
 :fail
 echo [build] Сборка не удалась.
 exit /b 1
-
-:success
-if not exist "%OUT%" (
-    echo [build] Ошибка: файл %OUT% не создан
-    exit /b 1
-)
-for %%A in ("%OUT%") do echo [build] Готово: %OUT% ^(%%~zA байт^)
-echo.
-echo Проверьте в moonloader, затем push на GitHub ^(коммитьте %OUT%, не src/^).
-exit /b 0
