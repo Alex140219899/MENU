@@ -1,0 +1,13 @@
+---
+description: VigMenu release workflow — source in src/, obf build before handoff
+globs: src/VigMenu.lua, VigUpdate.json, build.bat
+alwaysApply: true
+---
+
+# VigMenu: правки и релиз
+
+- Редактировать **только** `src/VigMenu.lua` (исходник). Не править корневой `VigMenu.lua` вручную.
+- После **любого** изменения `src/VigMenu.lua` или версии в `VigUpdate.json` — **обязательно** запустить `build.bat` из корня проекта.
+- `build.bat` перезаписывает корневой `VigMenu.lua` (obf + MoonLoader-заголовок).
+- **Git push не делать** — пользователь пушит сам. Коммитить только: `VigMenu.lua`, `VigUpdate.json`, JSON-данные; **не** `src/`.
+- Новая версия: синхронизировать `script_version(...)` в `src/VigMenu.lua` и `current_version` в `VigUpdate.json`.

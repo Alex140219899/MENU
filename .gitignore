@@ -1,0 +1,12 @@
+# Исходник VigMenu — только локально; на GitHub пушится obf VigMenu.lua из корня
+src/
+
+# Prometheus + Lua для build.bat (setup-prometheus.bat, install-lua.bat)
+tools/Prometheus/
+tools/lua/
+tools/lua-pack/
+
+# Локальные копии, не для репозитория
+Arizona Helper.lua
+*.obfuscated.lua
+build/.vigmenu.obf.tmp.lua
