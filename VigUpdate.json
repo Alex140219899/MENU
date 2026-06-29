@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.50",
-  "update_info": "Окно ключа при каждом входе/перезагрузке; отозванный ключ — сразу в окно, без минут ожидания",
+  "current_version": "5.2.51",
+  "update_info": "После успешного ввода ключа — авто-обновление с GitHub без отдельной кнопки",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
