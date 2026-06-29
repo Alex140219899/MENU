@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.51",
-  "update_info": "После успешного ввода ключа — авто-обновление с GitHub без отдельной кнопки",
+  "current_version": "5.5.5",
+  "update_info": "Стабильная ветка 5.5.x на базе 5.2.51",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
