@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.47",
-  "update_info": "Без ключа — только чат и /vigkey; обновление вручную кнопкой «Обновить с GitHub»",
+  "current_version": "5.2.48",
+  "update_info": "При первом запуске модули VigMenu/ скачиваются с GitHub автоматически (без jsDelivr)",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
