@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.42",
-  "update_info": "Меньше Warning при старте: очередь загрузок, без авто-скачивания, исправлен HWID (kernel32)",
+  "current_version": "5.2.43",
+  "update_info": "Ключ проверяется на сервере при каждом запуске; отключение/смена ключа в боте сразу закрывает доступ",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
