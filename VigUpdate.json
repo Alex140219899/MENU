@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.32",
-  "update_info": "Ключ доступа VigMenu: активация через Telegram-бот и Railway API",
+  "current_version": "5.2.33",
+  "update_info": "Окно ключа /vigkey — активация без открытия меню статей",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
