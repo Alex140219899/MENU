@@ -1,6 +1,6 @@
 {
-  "current_version": "5.5.6",
-  "update_info": "Исправлен краш окна ключа (совместимость mimgui: без InputTextWithHint/InvisibleButton)",
+  "current_version": "5.5.7",
+  "update_info": "Окно ключа не открывается при старте, если ключ сохранён (тихая проверка в фоне)",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
