@@ -1,6 +1,6 @@
 {
-  "current_version": "5.2.40",
-  "update_info": "Окно ключа без рамок/скролла; Enter вместо кнопок; отзыв доступа при отключении ключа в боте",
+  "current_version": "5.2.41",
+  "update_info": "Исправлен краш при старте (модуль лицензии); окно ключа без скролла; отзыв доступа из бота",
   "update_url": "https://raw.githubusercontent.com/Alex140219899/MENU/main/VigMenu.lua",
   "articles_version": "17",
   "articles_info": "ЗоГС, МЮ, МО, ЦА — полный список для увольнения/спец. выговора",
